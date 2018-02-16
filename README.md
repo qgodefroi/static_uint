@@ -1,5 +1,4 @@
-static_uint: an arbitrary known size integer
---------------------------------------------
+# static_uint: an arbitrary known size integer
 
 This library implements an unsigned integer of a set size without requiring dynamic allocations. The most common use is larger than 64-bit integers.
 
