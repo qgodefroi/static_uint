@@ -10,7 +10,7 @@ This is an extremely early work-in-progress, so it shouldn't really be used for 
 ## Dependencies
 
 - my own constd for compile time stdlib algorithms
-- Boost.Iterator (specifically iterator_facade) for bytewize iterators
+- Boost.Iterator (specifically iterator_facade) for bytewise iterators
 
 ## Expected improvements
 
