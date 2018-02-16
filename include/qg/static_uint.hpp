@@ -206,16 +206,19 @@ struct static_uint {
             constd::fill(begin(), begin() + right_elem_shift, 0);
         }
 
-        // perform the smaller bitwise shift
-        constd::accumulate(begin(), end(), std::size_t{0},
-                           [bitshift = shift % elem_bits](
-                               std::size_t carry, auto& elem) {
-                               auto const next_carry =
-                                   elem << (elem_bits - bitshift);
-                               elem >>= bitshift;
-                               elem |= carry;
-                               return next_carry;
-                           });
+        // perform the smaller bitwise shift, if any
+        auto const bitshift = shift % elem_bits;
+        if (bitshift) {
+            constd::accumulate(
+                begin(), end(), std::size_t{0},
+                [bitshift](std::size_t carry, auto& elem) {
+                    auto const next_carry = elem
+                                            << (elem_bits - bitshift);
+                    elem >>= bitshift;
+                    elem |= carry;
+                    return next_carry;
+                });
+        }
         return *this;
     }
 
@@ -300,4 +303,3 @@ struct numeric_limits<static_uint<size>> {
     }
 };
 }  // namespace std
-
