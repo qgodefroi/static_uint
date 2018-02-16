@@ -62,6 +62,10 @@ struct static_uint {
     static constexpr auto ARR_SIZE =
         detail::required_array_size(size);
 
+    static_assert(
+        size % sizeof(std::size_t) == 0,
+        "Currently, only multiples of platform size are supported");
+
   public:
     std::array<std::size_t, ARR_SIZE> data;
     constexpr static_uint() noexcept = default;
