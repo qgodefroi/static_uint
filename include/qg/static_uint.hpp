@@ -56,6 +56,11 @@ constexpr std::array<std::size_t, bigger_size> widen_array(
 }
 }  // namespace detail
 
+/**
+ * static_uint: an unsigned integer parameterized by its bit size
+ * Designed to be usable in arithmetic operations with normal unsigned
+ * semantics
+ */
 template <std::size_t size>
 struct static_uint {
   private:
@@ -68,13 +73,28 @@ struct static_uint {
 
   public:
     std::array<std::size_t, ARR_SIZE> data;
+
+    /**
+     * Constructors for default/value initialisation and
+     * initialisation from platform-sized integers
+     */
     constexpr static_uint() noexcept = default;
     constexpr static_uint(std::size_t in) noexcept : data{in} {}
 
+    /**
+     * Interpret some bytes as a big endian representations of a
+     * static_uint
+     * Useful with libraries or network protocols that write out
+     * integers as big endian
+     */
     template <class Bytes>
     static static_uint<size> from_big_endian(
         Bytes const& bytes) noexcept;
 
+    /**
+     * Conversion from narrower static_uints
+     * This is safe and cannot lead to truncation
+     */
     template <std::size_t other_size>
     friend struct static_uint;
     template <std::size_t other_size>
@@ -85,6 +105,11 @@ struct static_uint {
                       "smaller-size static_uint");
     }
 
+    /**
+     * Iterators simply walk the underlying data from largest to
+     * smallest platform-sized uint
+     * This might be removed from public API in the future
+     */
     using iterator =
         std::reverse_iterator<typename decltype(data)::iterator>;
     using const_iterator = std::reverse_iterator<typename decltype(
@@ -93,7 +118,6 @@ struct static_uint {
     using reverse_const_iterator =
         typename decltype(data)::const_iterator;
 
-    // begin() starts from highest member
     constexpr iterator begin() noexcept { return data.rbegin(); }
     constexpr iterator end() noexcept { return data.rend(); }
     constexpr const_iterator begin() const noexcept {
@@ -178,7 +202,7 @@ struct static_uint {
         return result += rhs;
     }
 
-    // bitwise
+    // bitwise operations
     constexpr static_uint& operator&=(
         static_uint const& rhs) noexcept {
         for (std::size_t i = 0; i < static_uint::ARR_SIZE; ++i) {

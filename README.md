@@ -16,3 +16,4 @@ This is an extremely early work-in-progress, so it shouldn't really be used for 
 - more artithmetic operations
 - ostream operations
 - multiple iterator types to view the uint as little/big/platform-endian
+- hex, binary, decimal literals
