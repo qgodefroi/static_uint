@@ -304,8 +304,10 @@ template <std::size_t size>
 template <class Bytes>
 static_uint<size> static_uint<size>::from_big_endian(
     Bytes const& bytes) noexcept {
-    // TODO check number of bytes
-    auto result = static_uint<256>{0};
+    // TODO check number of bytes in the passed-in sequence
+    // right now correct use is assumed, but this should in time do
+    // both compile-time and runtime checks to ensure correctness
+    auto result = static_uint<size>{0};
     std::copy(bytes.begin(), bytes.end(),
               big_endian_iterator(result));
     return result;
