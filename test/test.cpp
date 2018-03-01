@@ -20,6 +20,15 @@ std::ostream& operator<<(std::ostream& os,
     return os;
 }
 
+TEST_CASE("default construction") {
+    static_uint<256> t1{};
+    static_uint<256> t2{0};
+
+    CHECK(t1 == t2);
+    CHECK(t1 == 0);
+    CHECK(t2 == 0);
+}
+
 TEST_CASE("additions with double size_t's size") {
     constexpr auto uint =
         static_uint<2 * sizeof(std::size_t) * CHAR_BIT>{
@@ -80,6 +89,67 @@ TEST_CASE("right shifting more than 64 bits") {
         constexpr auto test192 = u256_max >> 64;
         CHECK(test128 == static_uint<256>{u128_max});
         CHECK(test192 == static_uint<256>{u192_max});
+    }
+}
+
+TEST_CASE("operator+") {
+    // some checks shamelessly lifted from
+    // https://github.com/cerevra/int/
+    using u512 = static_uint<512>;
+    u512 a1{3};
+    auto begin = a1.big_endian_begin();
+    // auto end2 = big_endian_iterator<512>::end(a11);;
+    begin[55] = 1;
+    CAPTURE(a1);
+    for (int i = 0; i < 55; ++i) {
+        CAPTURE(i);
+        CHECK(begin[i] == 0);
+    }
+
+    SUBCASE("") {
+        u512 a11 = a1 + 5;
+        auto begin = a11.big_endian_begin();
+        // auto end2 = big_endian_iterator<512>::end(a11);;
+        for (int i = 0; i < 55; ++i) {
+            CAPTURE(i);
+            CHECK(begin[i] == 0);
+        }
+        CHECK(begin[55] == 1);
+        for (int i = 56; i < 63; ++i) {
+            CAPTURE(i);
+            CHECK(begin[i] == 0);
+        }
+        CHECK(begin[63] == 8);
+    }
+
+    SUBCASE("") {
+        u512 a12 = a1 + 0;
+        auto begin = a12.big_endian_begin();
+        for (int i = 0; i < 55; ++i) {
+            CAPTURE(i);
+            CHECK(begin[i] == 0);
+        }
+        CHECK(begin[55] == 1);
+        for (int i = 56; i < 63; ++i) {
+            CAPTURE(i);
+            CHECK(begin[i] == 0);
+        }
+        CHECK(begin[63] == 3);
+    }
+
+    SUBCASE("") {
+        u512 a14 = a1 + std::numeric_limits<std::uint64_t>::max();
+        auto it = a14.big_endian_begin();
+        for (int i = 0; i < 55; ++i) {
+            CAPTURE(i);
+            CHECK(it[i] == 0);
+        }
+        CHECK(it[55] == 2);
+        for (int i = 56; i < 63; ++i) {
+            CAPTURE(i);
+            CHECK(it[i] == 0);
+        }
+        CHECK(it[63] == 2);
     }
 }
 /*

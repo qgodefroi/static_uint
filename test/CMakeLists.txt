@@ -1,2 +1,2 @@
 add_executable(static_uint_test test.cpp)
-target_link_libraries(static_uint_test static_uint)
+target_link_libraries(static_uint_test PRIVATE static_uint)

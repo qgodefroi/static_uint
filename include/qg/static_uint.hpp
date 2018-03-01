@@ -2,8 +2,9 @@
 
 #include <qg/constd.hpp>
 
+#include <boost/predef/other/endian.h>
+
 #include <array>
-#include <boost/iterator/iterator_facade.hpp>
 #include <cassert>
 #include <climits>
 #include <cstdint>
@@ -37,8 +38,30 @@ constexpr inline std::size_t required_array_size(
 
 /*
  * Helpers to make an array wider by copying its members into a
- * larger array Used to widen static_uints easily
+ * larger array
+ * Used to widen static_uints easily and correctly with regards to
+ * endianness
  */
+#if BOOST_ENDIAN_BIG_BYTE
+template <std::size_t bigger_size, std::size_t smaller_size,
+          std::size_t... zeros, std::size_t... is>
+constexpr std::array<std::size_t, bigger_size> widen_array_impl(
+    std::array<std::size_t, smaller_size> const& small_array,
+    std::index_sequence<zeros...>,
+    std::index_sequence<is...>) noexcept {
+    return {((void)zeros, 0)..., (small_array[is])...};
+}
+
+template <std::size_t bigger_size, std::size_t smaller_size>
+constexpr std::array<std::size_t, bigger_size> widen_array(
+    std::array<std::size_t, smaller_size> const&
+        small_array) noexcept {
+    constexpr auto z =
+        std::make_index_sequence<bigger_size - smaller_size>();
+    constexpr auto l = std::make_index_sequence<smaller_size>();
+    return widen_array_impl<bigger_size>(small_array, z, l);
+}
+#elif BOOST_ENDIAN_LITTLE_BYTE
 template <std::size_t bigger_size, std::size_t smaller_size,
           std::size_t... is>
 constexpr std::array<std::size_t, bigger_size> widen_array_impl(
@@ -54,6 +77,7 @@ constexpr std::array<std::size_t, bigger_size> widen_array(
     constexpr auto l = std::make_index_sequence<smaller_size>();
     return widen_array_impl<bigger_size>(small_array, l);
 }
+#endif
 }  // namespace detail
 
 /**
@@ -71,25 +95,16 @@ struct static_uint {
         size % sizeof(std::size_t) == 0,
         "Currently, only multiples of platform size are supported");
 
-  public:
     std::array<std::size_t, ARR_SIZE> data;
 
+  public:
     /**
      * Constructors for default/value initialisation and
      * initialisation from platform-sized integers
      */
     constexpr static_uint() noexcept = default;
-    constexpr static_uint(std::size_t in) noexcept : data{in} {}
-
-    /**
-     * Interpret some bytes as a big endian representations of a
-     * static_uint
-     * Useful with libraries or network protocols that write out
-     * integers as big endian
-     */
-    template <class Bytes>
-    static static_uint<size> from_big_endian(
-        Bytes const& bytes) noexcept;
+    constexpr static_uint(std::size_t in) noexcept
+        : data{detail::widen_array<ARR_SIZE>(std::array{in})} {}
 
     /**
      * Conversion from narrower static_uints
@@ -136,6 +151,43 @@ struct static_uint {
     constexpr reverse_const_iterator rend() const noexcept {
         return data.end();
     }
+
+    /**
+     * Bytewise iterators
+     * Defined depending on the underlying hardware
+     */
+    using bytes_iterator = unsigned char*;
+    using reverse_bytes_iterator =
+        std::reverse_iterator<unsigned char*>;
+    auto bytes_begin() noexcept {
+        return reinterpret_cast<unsigned char*>(data.data());
+    }
+    auto bytes_end() noexcept {
+        return reinterpret_cast<unsigned char*>(&*data.end());
+    }
+    auto rbytes_begin() noexcept {
+        return reverse_bytes_iterator{bytes_end()};
+    }
+    auto rbytes_end() noexcept {
+        return reverse_bytes_iterator{bytes_begin()};
+    }
+#if BOOST_ENDIAN_BIG_BYTE
+    using big_endian_iterator = bytes_iterator;
+    using little_endian_iterator = reverse_bytes_iterator;
+
+    auto little_endian_begin() noexcept { return rbytes_begin(); }
+    auto little_endian_end() noexcept { return rbytes_end(); }
+    auto big_endian_begin() noexcept { return bytes_begin(); }
+    auto big_endian_end() noexcept { return bytes_end(); }
+#elif BOOST_ENDIAN_LITTLE_BYTE
+    using big_endian_iterator = reverse_bytes_iterator;
+    using little_endian_iterator = bytes_iterator;
+
+    auto little_endian_begin() noexcept { return bytes_begin(); }
+    auto little_endian_end() noexcept { return bytes_end(); }
+    auto big_endian_begin() noexcept { return rbytes_begin(); }
+    auto big_endian_end() noexcept { return rbytes_end(); }
+#endif
 
     // comparisons
     friend constexpr int compare(
@@ -254,67 +306,9 @@ struct static_uint {
     }
 };
 
-/*
- * Iterator to walk a static_uint as bytes in big-endian format
- * Useful for things like serialisation/deserialisation
- * NOTE(quentin): this is not portable to big-endian hardware (yet)
- */
-template <std::size_t uint_size>
-struct big_endian_iterator
-    : boost::iterator_facade<big_endian_iterator<uint_size>,
-                             unsigned char,
-                             std::forward_iterator_tag> {
-  public:
-    explicit big_endian_iterator(static_uint<uint_size>& i) noexcept
-        : ui(i), curr_it(ui.begin()), curr_byte(max_byte) {}
-    static big_endian_iterator end(
-        static_uint<uint_size>& i) noexcept {
-        return {i, i.end(), max_byte};
-    }
-
-  private:
-    friend class boost::iterator_core_access;
-    static constexpr uint8_t max_byte = sizeof(std::size_t) - 1;
-
-    void increment() noexcept {
-        if (curr_byte == 0) {
-            ++curr_it;
-            curr_byte = max_byte;
-        } else {
-            --curr_byte;
-        }
-    }
-
-    bool equal(big_endian_iterator const& other) const noexcept {
-        return curr_it == other.curr_it &&
-               curr_byte == other.curr_byte;
-    }
-
-    unsigned char& dereference() const noexcept {
-        std::size_t* ptr = &(*curr_it);
-        return *(reinterpret_cast<unsigned char*>(ptr) + curr_byte);
-    }
-
-    static_uint<uint_size>& ui;
-    typename static_uint<uint_size>::iterator curr_it;
-    uint8_t curr_byte;
-};
-
-template <std::size_t size>
-template <class Bytes>
-static_uint<size> static_uint<size>::from_big_endian(
-    Bytes const& bytes) noexcept {
-    // TODO check number of bytes in the passed-in sequence
-    // right now correct use is assumed, but this should in time do
-    // both compile-time and runtime checks to ensure correctness
-    auto result = static_uint<size>{0};
-    std::copy(bytes.begin(), bytes.end(),
-              big_endian_iterator(result));
-    return result;
-}
-
 namespace std {
-// NOTE(quentin): this is not a full specialisation, which isn't ideal
+// NOTE(quentin): this is not a full specialisation, which
+// isn't ideal
 template <std::size_t size>
 struct numeric_limits<static_uint<size>> {
     static constexpr bool is_specialized() noexcept { return true; }
